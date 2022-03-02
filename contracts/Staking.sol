@@ -10,19 +10,19 @@ contract Staking is Ownable, ReentrancyGuard {
     token = ERC20(_token);
   }
 
-  ERC20 token;
+  ERC20 public token;
 
-  uint rewardsPool = 0;
+  uint public rewardsPool = 0;
 
   //частное и знаменатель в множителе награды
-  uint rewardsMultiplier = 1;
-  uint rewardsDivisor = 10;
+  uint private rewardsMultiplier = 1;
+  uint private rewardsDivisor = 10;
 
-  //частное и знаменатель в множителе бонуса
-  uint bonusMultiplier = 1;
-  uint bonusDivisor = 10;
+  //частное и знаменатель в множителе бонуса 
+  uint private bonusMultiplier = 1;
+  uint private bonusDivisor = 10;
 
-  bool isContractLocked = false;
+  bool public isContractLocked = false;
 
   struct Balance {
     uint amount;
