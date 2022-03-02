@@ -31,7 +31,7 @@ contract('Staking', ([deployer]) => {
         stakingAddress = await staking.address;
 
         deposit = ETHER;
-        await token.approve(stakingAddress, deposit, {from: deployer});
+        await token.approve(stakingAddress, deposit.mul(TEN), {from: deployer});
     });
     it("deposit test", async () => {
         const balanceBefore = await staking.getBalance({from: deployer});
@@ -39,24 +39,6 @@ contract('Staking', ([deployer]) => {
         const balanceAfter = await staking.getBalance({from: deployer});
 
         expect(balanceAfter.sub(balanceBefore).eq(deposit));
-    });
-    it("rewards and bonus calculating test", async () => {
-        await time.advanceBlock()
-        const testTime = await time.latest();
-        await staking.deposit(deposit, {from: deployer});
-
-        const multipier = ONE;
-        const divisor = THREE;
-        await staking.setRewardsFactor(multipier, divisor, {from: deployer});
-        await staking.setBonusFactor(multipier, divisor, {from: deployer});
-
-        await time.increaseTo(testTime.add(TEN));
-
-        const rewards = await staking.getRewards({from: deployer});
-        const bonus = await staking.getBonus({from: deployer});
-
-        expect(rewards.eq(deposit.mul(TEN).mul(multipier).div(divisor)));
-        expect(bonus.eq(deposit.mul(TEN).mul(multipier).div(divisor)));
     });
     it("withdraw test", async () => {
         const tokensBefore = await token.balanceOf(deployer);
@@ -86,5 +68,53 @@ contract('Staking', ([deployer]) => {
         await staking.withdraw(withdrawnTokens, {from: deployer}), 
 
         expect(toknesAfter.eq(tokensBefore.add(rewards).add(withdrawnTokens)));
+    });
+    it("rewards and bonus test 1", async () => {
+        await time.advanceBlock()
+        const testTime = await time.latest();
+        await staking.deposit(deposit, {from: deployer});
+
+        const multipier = ONE;
+        const divisor = THREE;
+        await staking.setRewardsFactor(multipier, divisor, {from: deployer});
+        await staking.setBonusFactor(multipier, divisor, {from: deployer});
+
+        await time.increaseTo(testTime.add(TEN));
+
+        const rewards = await staking.getRewards({from: deployer});
+        const bonus = await staking.getBonus({from: deployer});
+
+        expect(rewards.eq(deposit.mul(TEN).mul(multipier).div(divisor)));
+        expect(bonus.eq(deposit.mul(TEN).mul(multipier).div(divisor)));
+    });
+    it("rewards test", async () => {
+        await time.advanceBlock()
+        const testTime = await time.latest();
+        await staking.deposit(deposit, {from: deployer});
+
+        const multipier = ONE;
+        const divisor = THREE;
+        await staking.setRewardsFactor(multipier, divisor, {from: deployer});
+        await staking.setBonusFactor(multipier, divisor, {from: deployer});
+
+        await token.approve(stakingAddress, ETHER, {from: deployer});
+        await staking.addRewardsToPool(ETHER, {from: deployer}); 
+
+        
+
+        const expectedRewards = deposit.mul(TEN).mul(multipier).div(divisor);
+        const withdrawnRewards = expectedRewards.div(FIVE);
+
+        await time.increaseTo(testTime.add(TEN));
+        await staking.withdrawRewards(withdrawnRewards, {from: deployer});
+        const rewards = await staking.getRewards({from: deployer});
+
+        expect(rewards.eq(expectedRewards.sub(withdrawnRewards)));
+
+        const beforeBalance = await token.balanceOf(deployer);
+        await token.approve(stakingAddress, ONE, {from: deployer});
+        await staking.deposit(ONE, {from: deployer});
+        const afterBalance = await token.balanceOf(deployer);
+        expect(afterBalance.eq(beforeBalance.sub(ONE).add(rewards)))
     });
 });

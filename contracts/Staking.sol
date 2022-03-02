@@ -2,9 +2,10 @@
 pragma solidity >=0.4.22 <0.9.0;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract Staking is Ownable {
+contract Staking is Ownable, ReentrancyGuard {
   constructor(address _token) {
     token = ERC20(_token);
   }
@@ -47,7 +48,11 @@ contract Staking is Ownable {
   event WriteOffBonus(address user, uint amount);
   event WithdrawRewards(address user, uint amount);
 
-  function deposit(uint _amount) external notZero(_amount) lockable {
+  /**
+  * @dev deposit tokens for stake them. If the user had rewards, they are transfered on his address.
+  * @param _amount amount of tokens
+  */
+  function deposit(uint _amount) external notZero(_amount) lockable nonReentrant {
     balances[msg.sender].time = block.timestamp; 
     balances[msg.sender].amount += _amount;
     _deposit(_amount);
@@ -56,41 +61,83 @@ contract Staking is Ownable {
     }
   }
 
-  function withdraw(uint _amount) public lockable {
-    require(balances[msg.sender].amount >= _amount, "Insufficient balance");
-    _withdraw(_amount);
-    _resetRewardsAndBonus();
+  /**
+  * @dev withdraw tokens from stake. If the user had rewards, they are transfered on his address.
+  * @param _amount amount of tokens
+  */
+  function withdraw(uint _amount) external lockable nonReentrant {
+    _withdrawBalance(_amount);
   }
 
-  function withdrawAll() external {
-    withdraw(balances[msg.sender].amount);
+  /**
+  * @dev withdraw all tokens from stake. If the user had rewards, they are transfered on his address.
+  */
+  function withdrawAll() external lockable nonReentrant{
+    _withdrawBalance(balances[msg.sender].amount);
   }
 
+  /**
+  * @dev get stake balance of msg.sender
+  */
   function getBalance() public view returns(uint) {
     return balances[msg.sender].amount;
   }
 
+  /**
+  * @dev get bonus of msg.sender
+  */
   function getBonus() public view returns(uint) {
     Balance memory currentBalance = balances[msg.sender];
     return currentBalance.amount * (block.timestamp - currentBalance.time) * bonusMultiplier / bonusDivisor - balances[msg.sender].writeOffedBonus;
   }
 
-  function writeOffBonus(uint _amount) public {
-    require(getBonus() - _amount >= 0, "Insufficient bonus");
-    balances[msg.sender].writeOffedBonus += _amount;
-    emit WriteOffBonus(msg.sender, _amount);
-  }
-
-  function writeOffBonusFull() public {
-    writeOffBonus(getBonus());
-  }
-
+  /**
+  * @dev get rewards of msg.sender
+  */
   function getRewards() public view returns(uint){
     Balance memory currentBalance = balances[msg.sender];
     return currentBalance.amount * (block.timestamp - currentBalance.time) * rewardsMultiplier / rewardsDivisor - balances[msg.sender].withdrawnRewards;
   }
 
-  function withdrawRewards(uint _amount) public {
+  /**
+  * @dev write off bonus of msg.sender
+  * @param _amount amount of bonuses
+  */
+  function writeOffBonus(uint _amount) external nonReentrant{
+    _writeOffBonus(_amount);
+  }
+
+  /**
+  * @dev write off all bonus of msg.sender
+  */
+  function writeOffBonusFull() external nonReentrant {
+    _writeOffBonus(getBonus());
+  }
+
+
+  /**
+  * @dev withdraw rewards of msg.sender
+  * @param _amount amount of rewards
+  */
+
+  function withdrawRewards(uint _amount) external nonReentrant {
+    _withdrawRewards(_amount);
+  }
+
+  /**
+  * @dev withdraw all rewards of msg.sender
+  */
+  function withdrawAllRewards() external nonReentrant{
+    _withdrawRewards(getRewards());
+  }
+
+  function _writeOffBonus(uint _amount) private {
+    require(getBonus() - _amount >= 0, "Insufficient bonus");
+    balances[msg.sender].writeOffedBonus += _amount;
+    emit WriteOffBonus(msg.sender, _amount);
+  }
+  
+  function _withdrawRewards(uint _amount) private {
     require(getRewards() - _amount >= 0, "Insufficient rewards");
     require(rewardsPool - _amount >= 0, "Insufficient rewards pool");
     _withdraw(_amount);
@@ -99,18 +146,20 @@ contract Staking is Ownable {
     emit WithdrawRewards(msg.sender, _amount);
   }
 
-  function withdrawAllRewards() public {
-    withdrawRewards(getRewards());
-  }
-  
   function _resetRewardsAndBonus() private {
-    writeOffBonusFull();
+    _writeOffBonus(getBonus());
     balances[msg.sender].writeOffedBonus = 0;
 
-    withdrawAllRewards();
+    _withdrawRewards(getRewards());
     balances[msg.sender].withdrawnRewards = 0;
   }
   
+  function _withdrawBalance(uint _amount) private {
+    require(balances[msg.sender].amount >= _amount, "Insufficient balance");
+    _withdraw(_amount);
+    _resetRewardsAndBonus();
+  }
+
 
   function _withdraw(uint _amount) private notZero(_amount) {
     require(token.balanceOf(address(this)) >= _amount, "Insufficient balance");
