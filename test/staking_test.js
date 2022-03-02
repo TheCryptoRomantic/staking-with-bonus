@@ -34,9 +34,9 @@ contract('Staking', ([deployer]) => {
         await token.approve(stakingAddress, deposit.mul(TEN), {from: deployer});
     });
     it("deposit test", async () => {
-        const balanceBefore = await staking.getBalance({from: deployer});
+        const balanceBefore = await staking.getBalance(deployer);
         await staking.deposit(deposit, {from: deployer});
-        const balanceAfter = await staking.getBalance({from: deployer});
+        const balanceAfter = await staking.getBalance(deployer);
 
         expect(balanceAfter.sub(balanceBefore).eq(deposit));
     });
@@ -47,14 +47,9 @@ contract('Staking', ([deployer]) => {
 
         await time.increase(TEN);
 
-        const rewards = await staking.getRewards({from: deployer});
+        const rewards = await staking.getRewards(deployer);
 
         const withdrawnTokens = deposit.div(TWO);
-
-        await expectRevert (
-            staking.withdraw(withdrawnTokens, {from: deployer}), 
-            "revert"
-        );
 
         await expectRevert (
             staking.withdrawRewardsFromPool(new BN(100), {from: deployer}), 
@@ -81,8 +76,8 @@ contract('Staking', ([deployer]) => {
 
         await time.increaseTo(testTime.add(TEN));
 
-        const rewards = await staking.getRewards({from: deployer});
-        const bonus = await staking.getBonus({from: deployer});
+        const rewards = await staking.getRewards(deployer);
+        const bonus = await staking.getBonus(deployer);
 
         expect(rewards.eq(deposit.mul(TEN).mul(multipier).div(divisor)));
         expect(bonus.eq(deposit.mul(TEN).mul(multipier).div(divisor)));
@@ -97,17 +92,15 @@ contract('Staking', ([deployer]) => {
         await staking.setRewardsFactor(multipier, divisor, {from: deployer});
         await staking.setBonusFactor(multipier, divisor, {from: deployer});
 
-        await token.approve(stakingAddress, ETHER, {from: deployer});
-        await staking.addRewardsToPool(ETHER, {from: deployer}); 
-
-        
+        await token.approve(stakingAddress, ETHER.mul(TEN), {from: deployer});
+        await staking.addRewardsToPool(ETHER.mul(TEN), {from: deployer}); 
 
         const expectedRewards = deposit.mul(TEN).mul(multipier).div(divisor);
         const withdrawnRewards = expectedRewards.div(FIVE);
 
         await time.increaseTo(testTime.add(TEN));
         await staking.withdrawRewards(withdrawnRewards, {from: deployer});
-        const rewards = await staking.getRewards({from: deployer});
+        const rewards = await staking.getRewards(deployer);
 
         expect(rewards.eq(expectedRewards.sub(withdrawnRewards)));
 
